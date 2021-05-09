@@ -1,14 +1,6 @@
 #include "Convex.h"
 
 namespace Convex {
-	double randomNumber(double _min, double _max) {
-		std::random_device rd;
-		std::mt19937 gen(rd());
-		std::uniform_real_distribution<> dis(_min, _max);
-		return dis(gen);
-		// return 0.2;
-	}
-
 	NeuralNetwork::NeuralNetwork() {}
 
 	NeuralNetwork::NeuralNetwork(std::vector <int> _structure) {

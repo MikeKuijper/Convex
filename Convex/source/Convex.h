@@ -23,6 +23,13 @@ namespace Convex {
 
 	int debugMode = 2;
 
+	double randomNumber(double _min, double _max) {
+		std::random_device rd;
+		std::mt19937 gen(rd());
+		std::uniform_real_distribution<> dis(_min, _max);
+		return dis(gen);
+	}
+
 	enum activationFunction : unsigned char {
 		SIGMOID = 0, TANH, RELU, NONE
 	};
