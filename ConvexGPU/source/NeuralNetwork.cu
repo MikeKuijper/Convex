@@ -68,16 +68,16 @@ namespace ConvexGPU {
 			//m_weightMatrixes.at(i).print();
 			//std::cout << m_weightMatrixes.at(i) << std::endl;
 
-			//timeExecution([this, i]() {
-			m_activations[m_activations.size() - 1].copyMemoryToDevice();
-			m_weightMatrixes.at(i).copyMemoryToDevice();
-			//m_weightMatrixes.at(0).print();
-			//}, "Memory copy");
-			//Matrix <double> result;
-
-			//timeExecution([this, i, &result]() {
-			Matrix<double> result = matrixMultiply2D(&m_activations[m_activations.size() - 1], &m_weightMatrixes.at(i));
-			//}, "Matrix Multiplication");
+			timeExecution([this, i]() {
+				m_activations[m_activations.size() - 1].copyMemoryToDevice();
+				m_weightMatrixes.at(i).copyMemoryToDevice();
+				//m_weightMatrixes.at(0).print();
+			}, "=== Memory copy", 2);
+			
+			Matrix <double> result;
+			timeExecution([this, i, &result]() {
+				result = matrixMultiply2D(&m_activations[m_activations.size() - 1], &m_weightMatrixes.at(i));
+			}, "=== Matrix Multiplication", 2);
 
 			//TODO Write normalisation kernel and implement biases in previous layer
 			for (int j = 0; j < result.dimensions.at(1); j++) {
@@ -102,51 +102,51 @@ namespace ConvexGPU {
 
 	//TODO Check if this still works (cost reduces)
 	Matrix<double> NeuralNetwork::train(Matrix<double>* _input, Matrix<double>* _targetOutput, int _rangeStart, int _rangeEnd) {
-		//Matrix<double> feedResult;
+		Matrix<double> feedResult;
 
-		//timeExecution([&feedResult, this, _input, _rangeStart, _rangeEnd]() {
-		Matrix<double>  feedResult = feed(_input, _rangeStart, _rangeEnd);
-		//}, "=== Feed");
+		timeExecution([&feedResult, this, _input, _rangeStart, _rangeEnd]() {
+			feedResult = feed(_input, _rangeStart, _rangeEnd);
+		}, "=== Feed", 2);
 
-		//timeExecution([this, &feedResult, _targetOutput, _rangeEnd, _rangeStart]() {
-		m_cost = 0;
-		m_globalError = 0;
+		timeExecution([this, &feedResult, _targetOutput, _rangeEnd, _rangeStart]() {
+			m_cost = 0;
+			m_globalError = 0;
 
-		for (int i = 0; i < feedResult.size(); i++) {
-			double gradient = -deriveNormalise(feedResult.at2D(0, i));
-			double error = feedResult.at2D(0, i) - _targetOutput->at2D(0, i);
+			for (int i = 0; i < feedResult.size(); i++) {
+				double gradient = -deriveNormalise(feedResult.at2D(0, i));
+				double error = feedResult.at2D(0, i) - _targetOutput->at2D(0, i);
 
-			m_networkErrors.at(_rangeEnd).at(i) = error * gradient;
-			m_cost += error;
-		}
-
-		if (m_learningRate != 0) {
-			//timeExecution([this, _rangeEnd, _rangeStart]() {
-			for (int i = _rangeEnd - 1; i >= _rangeStart; i--) {
-				std::vector <double> nextLayerErrors = m_networkErrors.at(i + 1);
-
-				for (int j = 0; j < m_networkStructure.at(i); j++) {
-					double sum = 0;
-
-					//timeExecution([this, &sum, nextLayerErrors, i, j]() {
-					for (int k = 0; k < nextLayerErrors.size(); k++) {
-						//double* weight = getWeight(i + 1, k, i, j);
-						double* weight = &m_weightMatrixes.at(i).at2D(j, k);								
-						*weight += m_learningRate * nextLayerErrors.at(k) * m_activations.at(i).at2D(0, j);
-						
-						sum += *weight * nextLayerErrors.at(k);
-					}
-					//}, "======= Train-third");
-
-					double currentError = sum * deriveNormalise(m_activations.at(i).at2D(0, j));
-					m_networkErrors.at(i).at(j) = currentError;
-					m_globalError += abs(currentError);
-					m_biasMatrixes.at(i).at(j) += m_learningRate * currentError;
-				}
+				m_networkErrors.at(_rangeEnd).at(i) = error * gradient;
+				m_cost += error;
 			}
-			//}, "===== Train-second");
-		}
-		//}, "=== Train sequence");
+
+			if (m_learningRate != 0) {
+				timeExecution([this, _rangeEnd, _rangeStart]() {
+					for (int i = _rangeEnd - 1; i >= _rangeStart; i--) {
+						std::vector <double> nextLayerErrors = m_networkErrors.at(i + 1);
+
+						for (int j = 0; j < m_networkStructure.at(i); j++) {
+							double sum = 0;
+
+							timeExecution([this, &sum, nextLayerErrors, i, j]() {
+								for (int k = 0; k < nextLayerErrors.size(); k++) {
+									//double* weight = getWeight(i + 1, k, i, j);
+									double* weight = &m_weightMatrixes.at(i).at2D(j, k);								
+									*weight += m_learningRate * nextLayerErrors.at(k) * m_activations.at(i).at2D(0, j);
+						
+									sum += *weight * nextLayerErrors.at(k);
+								}
+							}, "======= Train-third", 3);
+
+							double currentError = sum * deriveNormalise(m_activations.at(i).at2D(0, j));
+							m_networkErrors.at(i).at(j) = currentError;
+							m_globalError += abs(currentError);
+							m_biasMatrixes.at(i).at(j) += m_learningRate * currentError;
+						}
+					}
+				}, "===== Train-second", 2);
+			}
+		}, "=== Train sequence", 1);
 
 		return feedResult;
 	}

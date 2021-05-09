@@ -5,8 +5,8 @@ namespace Convex {
 		std::random_device rd;
 		std::mt19937 gen(rd());
 		std::uniform_real_distribution<> dis(_min, _max);
-		//return dis(gen);
-		return 0.2;
+		return dis(gen);
+		// return 0.2;
 	}
 
 	NeuralNetwork::NeuralNetwork() {}
@@ -94,49 +94,49 @@ namespace Convex {
 
 	//TODO Check if this still works (cost reduces)
 	std::vector <double> NeuralNetwork::train(std::vector <double>* _input, std::vector <double>* _targetOutput, int _rangeStart, int _rangeEnd) {
-		//std::vector <double> feedResult;
+		std::vector <double> feedResult;
 
-		//timeExecution([&feedResult, this, _input, _rangeStart, _rangeEnd]() {
-		std::vector <double>  feedResult = feed(_input, _rangeStart, _rangeEnd);
-		//}, "=== Feed");
+		timeExecution([&feedResult, this, _input, _rangeStart, _rangeEnd]() {
+		  feedResult = feed(_input, _rangeStart, _rangeEnd);
+		}, "=== Feed", 2);
 
-		//timeExecution([this, &feedResult, _targetOutput, _rangeEnd, _rangeStart]() {
-		m_cost = 0;
-		m_globalError = 0;
+		timeExecution([this, &feedResult, _targetOutput, _rangeEnd, _rangeStart]() {
+			m_cost = 0;
+			m_globalError = 0;
 
-		for (int i = 0; i < feedResult.size(); i++) {
-			double gradient = -deriveNormalise(feedResult.at(i));
-			double error = feedResult.at(i) - _targetOutput->at(i);
-			m_networkErrors.at(_rangeEnd).at(i) = error * gradient;
-			m_cost += error;
-		}
-
-		if (m_learningRate != 0) {
-			//timeExecution([this, _rangeEnd, _rangeStart]() {
-			for (int i = _rangeEnd - 1; i >= _rangeStart; i--) {
-				std::vector <double> nextLayerErrors = m_networkErrors.at(i + 1);
-
-				for (int j = 0; j < m_networkStructure.at(i); j++) {
-					double sum = 0;
-
-					//timeExecution([this, &sum, nextLayerErrors, i, j]() {
-					for (int k = 0; k < nextLayerErrors.size(); k++) {
-						double* weight = getWeight(i + 1, k, i, j);
-						*weight += m_learningRate * nextLayerErrors.at(k) * m_activations.at(i).at(j);
-
-						sum += *weight * nextLayerErrors.at(k);
-					}
-					//}, "======= Train-third");
-
-					double currentError = sum * deriveNormalise(m_activations.at(i).at(j));
-					m_networkErrors.at(i).at(j) = currentError;
-					m_globalError += abs(currentError);
-					m_biasMatrixes.at(i).at(j) += m_learningRate * currentError;
-				}
+			for (int i = 0; i < feedResult.size(); i++) {
+				double gradient = -deriveNormalise(feedResult.at(i));
+				double error = feedResult.at(i) - _targetOutput->at(i);
+				m_networkErrors.at(_rangeEnd).at(i) = error * gradient;
+				m_cost += error;
 			}
-			//, "===== Train-second");
-		}
-		//}, "=== Train sequence");
+
+			if (m_learningRate != 0) {
+				timeExecution([this, _rangeEnd, _rangeStart]() {
+					for (int i = _rangeEnd - 1; i >= _rangeStart; i--) {
+						std::vector <double> nextLayerErrors = m_networkErrors.at(i + 1);
+
+						for (int j = 0; j < m_networkStructure.at(i); j++) {
+							double sum = 0;
+
+							timeExecution([this, &sum, nextLayerErrors, i, j]() {
+								for (int k = 0; k < nextLayerErrors.size(); k++) {
+									double* weight = getWeight(i + 1, k, i, j);
+									*weight += m_learningRate * nextLayerErrors.at(k) * m_activations.at(i).at(j);
+
+									sum += *weight * nextLayerErrors.at(k);
+								}
+								}, "======= Train-third", 3);
+
+							double currentError = sum * deriveNormalise(m_activations.at(i).at(j));
+							m_networkErrors.at(i).at(j) = currentError;
+							m_globalError += abs(currentError);
+							m_biasMatrixes.at(i).at(j) += m_learningRate * currentError;
+						}
+					}
+				}, "===== Train-second", 2);
+			}
+		}, "=== Train sequence", 1);
 
 		return feedResult;
 	}
@@ -176,6 +176,12 @@ namespace Convex {
 
 			if (abs(cost) <= minCost) {
 				serialise(_path);
+
+				//unsigned seed = std::chrono::system_clock::now()
+				//	.time_since_epoch()
+				//	.count();
+				//std::shuffle(std::begin(_dataset->m_imagesFlattened), std::end(_dataset->m_imagesFlattened), std::default_random_engine(seed));
+
 				minCost = abs(cost);
 				nonImprovementCount = 0;
 			}

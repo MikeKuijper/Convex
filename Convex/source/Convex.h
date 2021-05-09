@@ -18,19 +18,10 @@
 
 // * Parallel processing in applying activationFunction and adding biases
 
-template <typename Function>
-double timeExecution(Function f, const char* text) {
-	auto start = std::chrono::high_resolution_clock::now();
-	f();
-	auto stop = std::chrono::high_resolution_clock::now();
-	auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-	std::cout << "[CONVEX] " << text << ": " << duration.count() / 1000.0f << " ms" << std::endl;
-
-	return duration.count();
-}
-
 namespace Convex {
 	//char VERSION[16] = "v1.0.0a";
+
+	int debugMode = 2;
 
 	enum activationFunction : unsigned char {
 		SIGMOID = 0, TANH, RELU, NONE
@@ -165,4 +156,27 @@ namespace Convex {
 
 	template <typename T>
 	std::vector<T> flattenVector(const std::vector<std::vector<T>>& v);
+}
+
+template <typename Function>
+double timeExecution(Function f, const char* text) {
+	auto start = std::chrono::high_resolution_clock::now();
+	f();
+	auto stop = std::chrono::high_resolution_clock::now();
+	auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+	std::cout << "[CONVEX] " << text << ": " << duration.count() / 1000.0f << " ms" << std::endl;
+
+	return duration.count();
+}
+
+template <typename Function>
+double timeExecution(Function f, const char* text, int enable) {
+	if (enable <= Convex::debugMode)
+	{
+		return timeExecution(f, text);
+	}
+	else {
+		f();
+		return NULL;
+	}
 }

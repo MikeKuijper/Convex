@@ -120,7 +120,6 @@ namespace ConvexGPU {
 			return n;
 		}
 
-		// This might solve things
 		int getIndex2D(int x, int y) {
 			return dimensions.at(0) * x + y;
 		}
@@ -139,8 +138,6 @@ namespace ConvexGPU {
 		}
 
 		void print() {
-			//std::cout << dimensions[0] << ", " << dimensions[1] << std::endl;
-
 			std::cout << "[";
 			for (int i = 0; i < dimensions[0]; i++) {
 				if (i != 0) std::cout << " ";
@@ -159,6 +156,7 @@ namespace ConvexGPU {
 			//std::cout << "[CONVEX] Copying " << m_size * sizeof(T) << " bytes to host" << std::endl;
 			cudaError_t res = cudaMemcpy(m_hostData, m_deviceData, m_size * sizeof(T), cudaMemcpyDeviceToHost);
 			if (res != cudaSuccess) {
+				std::cerr << "[CONVEX ERROR] CUDA error " << res << std::endl;
 				throw std::runtime_error("Failed to copy to host memory");
 			}
 		}
@@ -167,7 +165,7 @@ namespace ConvexGPU {
 			//std::cout << "[CONVEX] Copying " << m_size * sizeof(T) << " bytes to device" << std::endl;
 			cudaError_t res = cudaMemcpy(m_deviceData, m_hostData, m_size * sizeof(T), cudaMemcpyHostToDevice);
 			if (res != cudaSuccess) {
-				std::cout << "[CONVEX ERROR] CUDA error " << res << std::endl;
+				std::cerr << "[CONVEX ERROR] CUDA error " << res << std::endl;
 				throw std::runtime_error("Failed to copy to device memory");
 			}
 		}
@@ -183,7 +181,7 @@ namespace ConvexGPU {
 			int i = getIndex(indexes...);
 			if (i <= m_size) return this->operator[](i);
 			else {
-				std::cout << "[ERROR] Index " << i << " exceeds array bounds" << std::endl;
+				std::cerr << "[ERROR] Index " << i << " exceeds array bounds" << std::endl;
 				throw std::out_of_range("Index exceeds array bounds");
 			}
 		}
@@ -192,7 +190,7 @@ namespace ConvexGPU {
 			int i = getIndex(dim);
 			if (i <= m_size) return this->operator[](i);
 			else {
-				std::cout << "[ERROR] Index " << i << " exceeds array bounds" << std::endl;
+				std::cerr << "[ERROR] Index " << i << " exceeds array bounds" << std::endl;
 				throw std::out_of_range("Index exceeds array bounds");
 			}
 		}
@@ -201,7 +199,7 @@ namespace ConvexGPU {
 			int i = getIndex2D(x, y);
 			if (i <= m_size) return this->operator[](i);
 			else {
-				std::cout << "[ERROR] Index " << i << " exceeds array bounds" << std::endl;
+				std::cerr << "[ERROR] Index " << i << " exceeds array bounds" << std::endl;
 				throw std::out_of_range("Index exceeds array bounds");
 			}
 		}
