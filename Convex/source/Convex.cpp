@@ -5,10 +5,10 @@ namespace Convex {
 
 	NeuralNetwork::NeuralNetwork(std::vector <int> _structure) {
 		m_networkStructure = _structure;
-		m_networkLength = _structure.size();
+		m_networkLength = (unsigned int) _structure.size();
 		m_learningRate = 0.1;
 		m_activationFunction = SIGMOID;
-		m_hardwareMode = CPU;
+		//m_hardwareMode = CPU;
 
 		generateNetwork();
 	}
@@ -22,19 +22,19 @@ namespace Convex {
 		m_biasMatrixes.clear();
 		m_networkErrors.clear();
 
-		for (int i = 1; i < m_networkLength; i++) {
-			std::vector <std::vector <double>> matrix;
-			for (int j = 0; j < m_networkStructure.at(i - 1); j++) {
-				std::vector <double> submatrix;
-				for (int k = 0; k < m_networkStructure.at(i); k++) {
-					submatrix.push_back(randomNumber(-2, 2));
-				}
-				matrix.push_back(submatrix);
-			}
-			m_weightMatrixes.push_back(matrix);
-		}
-
 		for (int i = 0; i < m_networkLength; i++) {
+			if (i != 0) {
+				std::vector <std::vector <double>> matrix;
+				for (int j = 0; j < m_networkStructure.at(i - 1); j++) {
+					std::vector <double> submatrix;
+					for (int k = 0; k < m_networkStructure.at(i); k++) {
+						submatrix.push_back(randomNumber(-2, 2));
+					}
+					matrix.push_back(submatrix);
+				}
+				m_weightMatrixes.push_back(matrix);
+			}
+
 			std::vector <double> biasMatrix;
 			std::vector <double> errorMatrix;
 			for (int j = 0; j < m_networkStructure.at(i); j++) {
@@ -63,7 +63,7 @@ namespace Convex {
 		return activation.at(0);
 	}
 
-	std::vector <double> NeuralNetwork::feed(std::vector <double>* _input, int _rangeStart, int _rangeEnd) {
+	std::vector <double> NeuralNetwork::feed(std::vector <double>* _input, unsigned int _rangeStart, unsigned int _rangeEnd) {
 		std::vector <std::vector <double>> activation;
 		activation.push_back(*_input);
 
@@ -89,7 +89,7 @@ namespace Convex {
 		std::vector <double> feedResult;
 
 		timeExecution([&feedResult, this, _input, _rangeStart, _rangeEnd]() {
-		  feedResult = feed(_input, _rangeStart, _rangeEnd);
+			feedResult = feed(_input, _rangeStart, _rangeEnd);
 		}, "=== Feed", 2);
 
 		timeExecution([this, &feedResult, _targetOutput, _rangeEnd, _rangeStart]() {
@@ -118,7 +118,7 @@ namespace Convex {
 
 									sum += *weight * nextLayerErrors.at(k);
 								}
-								}, "======= Train-third", 3);
+								}, "======= Weight loop", 3);
 
 							double currentError = sum * deriveNormalise(m_activations.at(i).at(j));
 							m_networkErrors.at(i).at(j) = currentError;
@@ -126,53 +126,62 @@ namespace Convex {
 							m_biasMatrixes.at(i).at(j) += m_learningRate * currentError;
 						}
 					}
-				}, "===== Train-second", 2);
+				}, "===== Layer loop", 2);
 			}
 		}, "=== Train sequence", 1);
 
 		return feedResult;
 	}
 
-	double NeuralNetwork::train(ImageClassDataset* _dataset) {
-		double cost = 0;
-		double score = 0;
-		for (int n = 0; n < _dataset->m_size; n++) {
-			std::vector <double> targetResult(10, 0);
-			targetResult[_dataset->m_labels[n]] = 1;
+	double NeuralNetwork::train(Convex::ImageClassDataset* _dataset, bool _assessPerformance) {
+		if (_assessPerformance == true) {
+			double cost = 0;
+			double score = 0;
+			for (unsigned int n = 0; n < _dataset->m_size; n++) {
+				std::vector <double> targetResult(10, 0);
+				targetResult[_dataset->m_labels[n]] = 1;
 
-			auto feedResult = train(&_dataset->m_imagesFlattened[n], &targetResult);
-			cost += m_cost / _dataset->m_size;
+				auto feedResult = train(&_dataset->m_imagesFlattened[n], &targetResult);
+				cost += m_cost / _dataset->m_size;
 
-			std::vector<double>::iterator maxElement = std::max_element(feedResult.begin(), feedResult.end());
-			int maxElementIndex = std::distance(feedResult.begin(), maxElement);
+				std::vector<double>::iterator maxElement = std::max_element(feedResult.begin(), feedResult.end());
+				int maxElementIndex = std::distance(feedResult.begin(), maxElement);
 
-			if (maxElementIndex == _dataset->m_labels[n]) {
-				score++;
+				if (maxElementIndex == _dataset->m_labels[n]) {
+					score++;
+				}
 			}
-
-			//if (n % 1000 == 0) std::cout << "[CONVEX] Subtrain cycle " << n << ": \t" << m_cost << std::endl;
+			this->m_score = score / _dataset->m_size;
+			return cost;
 		}
-		this->m_score = score / _dataset->m_size;
-		return cost;
+		else {
+			double cost = 0;
+			for (unsigned int n = 0; n < _dataset->m_size; n++) {
+				std::vector <double> targetResult(10, 0);
+				targetResult[_dataset->m_labels[n]] = 1;
+
+				auto feedResult = train(&_dataset->m_imagesFlattened[n], &targetResult);
+				cost += m_cost / _dataset->m_size;
+			}
+			return cost;
+		}
 	}
 
-	void NeuralNetwork::trainSequence(ImageClassDataset* _dataset, int _epochs, const char* _path) {
+	void NeuralNetwork::trainSequence(Convex::ImageClassDataset* _dataset, int _epochs, const char* _path) {
 		std::cout << "[CONVEX] Training start" << std::endl;
 
 		double minCost = abs(assess(_dataset));
 		int nonImprovementCount = 0;
 
 		for (int n = 0; n < _epochs; n++) {
-			double cost = train(_dataset);
-			std::cout << "[CONVEX] Train epoch " << n << ": " << cost << " (" << round((float)m_score * 10000) / 100 << "%)" << std::endl;
+			double cost = train(_dataset, n % 1 == 0);
+			if (n % 1 == 0) std::cout << "[CONVEX] Train epoch " << n << ": " << cost << " (" << round((float)m_score * 10000) / 100 << "%)" << std::endl;
+			else std::cout << "[CONVEX] Train epoch " << n << ": " << cost << std::endl;
 
 			if (abs(cost) <= minCost) {
 				serialise(_path);
 
-				//unsigned seed = std::chrono::system_clock::now()
-				//	.time_since_epoch()
-				//	.count();
-				//std::shuffle(std::begin(_dataset->m_imagesFlattened), std::end(_dataset->m_imagesFlattened), std::default_random_engine(seed));
+				//_dataset->shuffle();
 
 				minCost = abs(cost);
 				nonImprovementCount = 0;
@@ -191,13 +200,13 @@ namespace Convex {
 		}
 	}
 
-	double NeuralNetwork::assess(ImageClassDataset* _dataset) {
+	double NeuralNetwork::assess(Convex::ImageClassDataset* _dataset) {
 		std::cout << "[CONVEX] Assessing network...";
 
 		double learningRateTemp = m_learningRate;
 		m_learningRate = 0;
 
-		double cost = train(_dataset);
+		double cost = train(_dataset, true);
 		m_learningRate = learningRateTemp;
 
 		std::cout << " done" << std::endl;
@@ -241,28 +250,17 @@ namespace Convex {
 	}*/
 
 	std::vector<std::vector <double>> NeuralNetwork::matrixMultiply(std::vector<std::vector <double>>* _matrixA, std::vector<std::vector <double>>* _matrixB) {
-		int rows = _matrixA->size();
-		int cols = _matrixB->at(0).size();
+		unsigned int rows = (unsigned int) _matrixA->size();
+		unsigned int cols = (unsigned int) _matrixB->at(0).size();
 
 		std::vector<std::vector <double>> output(rows, std::vector <double>(cols, 0));
 
-		if (this->m_hardwareMode == CPU) {
-			for (int i = 0; i < rows; i++) {
-				for (int j = 0; j < cols; j++) {
+		#pragma omp parallel for
+		{
+			for (unsigned int i = 0; i < rows; i++) {
+				for (unsigned int j = 0; j < cols; j++) {
 					for (unsigned int k = 0; k < _matrixB->size(); k++) {
 						output[i][j] += _matrixA->at(i).at(k) * _matrixB->at(k).at(j);
-					}
-				}
-			}
-		}
-		else if (this->m_hardwareMode == CPU_MT) {
-#pragma omp parallel for
-			{
-				for (int i = 0; i < rows; i++) {
-					for (int j = 0; j < cols; j++) {
-						for (unsigned int k = 0; k < _matrixB->size(); k++) {
-							output[i][j] += _matrixA->at(i).at(k) * _matrixB->at(k).at(j);
-						}
 					}
 				}
 			}
@@ -271,16 +269,16 @@ namespace Convex {
 	}
 
 	std::ofstream* NeuralNetwork::serialise(std::ofstream* _outputStream, bool _swapEndianness) {
-		char signature[10] = "#ConvexNN";
-		writeVariable(&signature, _outputStream);
+		//char signature[10] = "#ConvexNN";
+		//writeVariable(&signature, _outputStream, _swapEndianness);
 
-		writeVariable(&m_learningRate, _outputStream);
-		writeVariable(&m_activationFunction, _outputStream);
-		writeVariable(&m_hardwareMode, _outputStream);
+		writeVariable(&m_learningRate, _outputStream, _swapEndianness);
+		writeVariable(&m_activationFunction, _outputStream, _swapEndianness);
+		//writeVariable(&m_hardwareMode, _outputStream, _swapEndianness);
 
-		writeVector(&m_networkStructure, _outputStream);
-		writeVector(&m_biasMatrixes, _outputStream);
-		writeVector(&m_weightMatrixes, _outputStream);
+		writeVector(&m_networkStructure, _outputStream, _swapEndianness);
+		writeVector(&m_biasMatrixes, _outputStream, _swapEndianness);
+		writeVector(&m_weightMatrixes, _outputStream, _swapEndianness);
 
 		return _outputStream;
 	}
@@ -298,19 +296,19 @@ namespace Convex {
 	}
 
 	std::ifstream* NeuralNetwork::deserialise(std::ifstream* _inputStream, bool _swapEndianness) {
-		_inputStream->seekg(10, std::ios::cur);
+		//_inputStream->seekg(10, std::ios::cur);
 
-		readVariable(&m_learningRate, _inputStream);
-		readVariable(&m_activationFunction, _inputStream);
-		readVariable(&m_hardwareMode, _inputStream);
+		readVariable(&m_learningRate, _inputStream, _swapEndianness);
+		readVariable(&m_activationFunction, _inputStream, _swapEndianness);
+		//readVariable(&m_hardwareMode, _inputStream, _swapEndianness);
 
 		m_networkStructure.clear();
-		readVector(&m_networkStructure, _inputStream);
-		m_networkLength = m_networkStructure.size();
+		readVector(&m_networkStructure, _inputStream, _swapEndianness);
+		m_networkLength = (unsigned int) m_networkStructure.size();
 		m_biasMatrixes.clear();
-		readVector(&m_biasMatrixes, _inputStream);
+		readVector(&m_biasMatrixes, _inputStream, _swapEndianness);
 		m_weightMatrixes.clear();
-		readVector(&m_weightMatrixes, _inputStream);
+		readVector(&m_weightMatrixes, _inputStream, _swapEndianness);
 
 		m_networkErrors.clear();
 
@@ -339,7 +337,7 @@ namespace Convex {
 		}
 		else {
 			std::cout << " failed" << std::endl;
-			std::cout << "[CONVEX] ERROR: Could not open " << _path << std::endl;
+			std::cerr << "[CONVEX] ERROR: Could not open " << _path << std::endl;
 		}
 	}
 
@@ -358,7 +356,7 @@ namespace Convex {
 			return _input;
 			break;
 		default:
-			std::cout << "[CONVEX ERROR] Invalid activation function" << std::endl;
+			std::cerr << "[CONVEX] ERROR: Invalid activation function" << std::endl;
 			break;
 		}
 	}
@@ -373,13 +371,13 @@ namespace Convex {
 			return 1 - std::pow((2 / (1 + exp(-2 * _input))), 2);
 			break;
 		case RELU:
-			return _input;
+			return 1;
 			break;
 		case NONE:
 			return _input;
 			break;
 		default:
-			std::cout << "[CONVEX ERROR] Invalid activation function" << std::endl;
+			std::cerr << "[CONVEX] ERROR: Invalid activation function" << std::endl;
 			break;
 		}
 	}
@@ -392,8 +390,7 @@ namespace Convex {
 		return &_ptrWeightMatrixes->at(_n2Layer).at(_n2Neuron).at(_n1Neuron);
 	}
 
-	AutoEncoder::AutoEncoder() {
-	}
+	AutoEncoder::AutoEncoder() {}
 
 	AutoEncoder::AutoEncoder(std::vector <int> _structure) {
 		m_fullNetworkStructure = _structure;
@@ -417,7 +414,7 @@ namespace Convex {
 
 	void AutoEncoder::generateNetworks() {
 		m_encoderNetworkStructure = subVector(&m_fullNetworkStructure, 0, m_sharedLayer);
-		m_decoderNetworkStructure = subVector(&m_fullNetworkStructure, m_sharedLayer, m_fullNetworkStructure.size() - 1);
+		m_decoderNetworkStructure = subVector(&m_fullNetworkStructure, (unsigned int) m_sharedLayer, (unsigned int) m_fullNetworkStructure.size() - 1);
 
 		m_network = NeuralNetwork(m_fullNetworkStructure);
 		m_network.m_activationFunction = this->m_activationFunction;
@@ -462,19 +459,20 @@ namespace Convex {
 		return m_network.m_cost;
 	}
 
-	std::ofstream* AutoEncoder::serialise(std::ofstream* _outputStream) {
+	std::ofstream* AutoEncoder::serialise(std::ofstream* _outputStream, bool _swapEndianness) {
 		char signature[10] = "#ConvexAE";
-		writeVariable(&signature, _outputStream);
+		writeVariable(&signature, _outputStream, _swapEndianness);
 
-		writeVariable(&m_sharedLayer, _outputStream);
-		writeVariable(&m_learningRate, _outputStream);
-		writeVariable(&m_activationFunction, _outputStream);
-		writeVector(&m_fullNetworkStructure, _outputStream);
+		writeVariable(&m_sharedLayer, _outputStream, _swapEndianness);
+		writeVariable(&m_learningRate, _outputStream, _swapEndianness);
+		writeVariable(&m_activationFunction, _outputStream, _swapEndianness);
+		writeVector(&m_fullNetworkStructure, _outputStream, _swapEndianness);
 
 		m_network.serialise(_outputStream);
 
 		return _outputStream;
 	}
+
 	void AutoEncoder::serialise(const char * _path) {
 		std::ofstream file;
 		file.open(_path, std::ios::binary);
@@ -483,15 +481,15 @@ namespace Convex {
 		file.close();
 	}
 
-	std::ifstream* AutoEncoder::deserialise(std::ifstream* _inputStream) {
+	std::ifstream* AutoEncoder::deserialise(std::ifstream* _inputStream, bool _swapEndianness) {
 		_inputStream->seekg(10, std::ios::cur);
 
-		readVariable(&m_sharedLayer, _inputStream);
-		readVariable(&m_learningRate, _inputStream);
-		readVariable(&m_activationFunction, _inputStream);
-		readVector(&m_fullNetworkStructure, _inputStream);
+		readVariable(&m_sharedLayer, _inputStream, _swapEndianness);
+		readVariable(&m_learningRate, _inputStream, _swapEndianness);
+		readVariable(&m_activationFunction, _inputStream, _swapEndianness);
+		readVector(&m_fullNetworkStructure, _inputStream, _swapEndianness);
 
-		m_network.deserialise(_inputStream);
+		m_network.deserialise(_inputStream, _swapEndianness);
 
 		m_encoderNetworkStructure = subVector(&m_fullNetworkStructure, 0, m_sharedLayer);
 		m_decoderNetworkStructure = subVector(&m_fullNetworkStructure, m_sharedLayer, m_fullNetworkStructure.size() - 1);
@@ -525,11 +523,11 @@ namespace Convex {
 		//std::cout << "[CONVEX] Rows: \t\t" << m_rows << std::endl;
 		//std::cout << "[CONVEX] Columns: \t" << m_columns << std::endl;
 
-		for (int n = 1; n <= m_size; n++) {
+		for (unsigned int n = 1; n <= m_size; n++) {
 			std::vector <std::vector<double>> image;
-			for (int y = 0; y < m_rows; y++) {
+			for (unsigned int y = 0; y < m_rows; y++) {
 				std::vector <double> row;
-				for (int x = 0; x < m_columns; x++) {
+				for (unsigned int x = 0; x < m_columns; x++) {
 					unsigned char value;
 					readVariable(&value, _inputStream, true);
 					row.push_back((double)value);
@@ -544,6 +542,7 @@ namespace Convex {
 
 		return _inputStream;
 	}
+
 	void ImageClassDataset::deserialiseMNISTImages(const char* _path, bool _swapEndianness) {
 		std::ifstream imageFileStream;
 		imageFileStream.open(_path, std::ios::binary);
@@ -557,13 +556,14 @@ namespace Convex {
 			std::cout << "[CONVEX] ERROR: Could not open " << _path << std::endl;
 		}
 	}
+
 	std::ifstream* ImageClassDataset::deserialiseMNISTLabels(std::ifstream* _inputStream, bool _swapEndianness) {
 		_inputStream->seekg(4, std::ios::cur);
 		readVariable(&m_size, _inputStream, _swapEndianness);
 
 		std::cout << "[CONVEX] Loading MNIST label file...";
 
-		for (int n = 0; n < m_size; n++) {
+		for (unsigned int n = 0; n < m_size; n++) {
 			unsigned char label;
 			readVariable(&label, _inputStream, _swapEndianness);
 			m_labels.push_back(label);
@@ -573,6 +573,7 @@ namespace Convex {
 
 		return _inputStream;
 	}
+
 	void ImageClassDataset::deserialiseMNISTLabels(const char* _path, bool _swapEndianness) {
 		std::ifstream labelFileStream;
 		labelFileStream.open(_path, std::ios::binary);
@@ -583,7 +584,7 @@ namespace Convex {
 		}
 		else {
 			std::cout << " failed" << std::endl;
-			std::cout << "[CONVEX] ERROR: Could not open " << _path << std::endl;
+			std::cerr << "[CONVEX] ERROR: Could not open " << _path << std::endl;
 		}
 	}
 
@@ -597,7 +598,7 @@ namespace Convex {
 		}
 		else {
 			std::cout << " failed" << std::endl;
-			std::cout << "[CONVEX] ERROR: Could not open " << _imagePath << std::endl;
+			std::cerr << "[CONVEX] ERROR: Could not open " << _imagePath << std::endl;
 		}
 
 		std::ifstream labelFileStream;
@@ -609,107 +610,28 @@ namespace Convex {
 		}
 		else {
 			std::cout << " failed" << std::endl;
-			std::cout << "[CONVEX] ERROR: Could not open " << _labelPath << std::endl;
+			std::cerr << "[CONVEX] ERROR: Could not open " << _labelPath << std::endl;
 		}
 	}
 
 	void ImageClassDataset::flatten() {
-		for (int i = 0; i < m_size; i++) {
+		for (unsigned int i = 0; i < m_size; i++) {
 			m_imagesFlattened.push_back(flattenVector(m_images.at(i)));
 		}
 		m_images.clear();
 	}
 
-	template <class variableType>
-	void writeVariable(variableType* _variable, std::ofstream* _fs, bool _swapEndianness) {
-		variableType &temp = *_variable;
-		if (_swapEndianness == true) endianSwap(&temp);
-		_fs->write(reinterpret_cast<char*> (&temp), sizeof(variableType));
-	}
-
-	template <class variableType>
-	variableType readVariable(variableType* _variable, std::ifstream* _fs, bool _swapEndianness) {
-		_fs->read(reinterpret_cast<char*> (_variable), sizeof(*_variable));
-		if (_swapEndianness) endianSwap(_variable);
-		return *_variable;
-	}
-
-	template <class number>
-	void writeVector(std::vector <number>* _vector, std::ofstream* _fs, bool _swapEndianness) {
-		int vectorSize = _vector->size();
-		writeVariable(&vectorSize, _fs, _swapEndianness);
-
-		for (int i = 0; i < vectorSize; i++) {
-			writeVariable(&_vector->at(i), _fs, _swapEndianness);
+	void ImageClassDataset::flattenMatrix() {
+		for (unsigned int i = 0; i < m_size; i++) {
+			//m_imagesFlattenedMatrix.push_back(flattenVector(m_images.at(i)));
 		}
+		m_images.clear();
 	}
 
-	template <class number>
-	void writeVector(std::vector <std::vector <number>>* _vector, std::ofstream* _fs, bool _swapEndianness) {
-		int vectorSize = _vector->size();
-		writeVariable(&vectorSize, _fs, _swapEndianness);
-
-		for (int i = 0; i < vectorSize; i++) {
-			writeVector(&_vector->at(i), _fs, _swapEndianness);
-		}
-	}
-
-	template <class number>
-	void writeVector(std::vector <std::vector <std::vector <number>>>* _vector, std::ofstream* _fs, bool _swapEndianness) {
-		int vectorSize = _vector->size();
-		writeVariable(&vectorSize, _fs, _swapEndianness);
-
-		for (int i = 0; i < vectorSize; i++) {
-			writeVector(&_vector->at(i), _fs, _swapEndianness);
-		}
-	}
-
-	template <typename number>
-	void readVector(std::vector <number>* _vector, std::ifstream* _fs) {
-		int vectorSize;
-		readVariable(&vectorSize, _fs);
-
-		for (int i = 0; i < vectorSize; i++) {
-			number var;
-			_vector->push_back(readVariable(&var, _fs));
-		}
-	}
-
-	template <typename number>
-	void readVector(std::vector <std::vector <number>>* _vector, std::ifstream* _fs) {
-		int vectorSize;
-		readVariable(&vectorSize, _fs);
-
-		for (int i = 0; i < vectorSize; i++) {
-			std::vector <number> vector;
-			readVector(&vector, _fs);
-			_vector->push_back(vector);
-		}
-	}
-
-	template <class number>
-	std::vector<number> subVector(std::vector <number>* _vector, int _i, int _j) {
-		auto first = _vector->begin() + _i;
-		auto last = _vector->begin() + _j + 1;
-		std::vector <number> v(first, last);
-		return v;
-	}
-
-	template <class variable>
-	void endianSwap(variable *objp) {
-		unsigned char *memp = reinterpret_cast<unsigned char*>(objp);
-		std::reverse(memp, memp + sizeof(variable));
-	}
-
-	template <typename T>
-	std::vector<T> flattenVector(const std::vector<std::vector<T>>& v) {
-		std::size_t total_size = 0;
-		for (const auto& sub : v)
-			total_size += sub.size();
-		std::vector<T> result;
-		result.reserve(total_size);
-		for (const auto& sub : v)
-			result.insert(result.end(), sub.begin(), sub.end());
-		return result;
+	void ImageClassDataset::shuffle() {
+		unsigned seed = (unsigned) std::chrono::system_clock::now()
+			.time_since_epoch()
+			.count();
+		std::shuffle(std::begin(m_imagesFlattened), std::end(m_imagesFlattened), std::default_random_engine(seed));
 	}
 }

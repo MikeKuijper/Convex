@@ -1,5 +1,6 @@
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
+#include "Common.h"
 #include "Convex.h"
 #include "ConvexGPU.h"
 
@@ -13,13 +14,12 @@ namespace ConvexGPU {
 		m_networkLength = _structure.size();
 		m_learningRate = 0.1;
 		m_activationFunction = SIGMOID;
-		//m_hardwareMode = CPU;
 
 		generateNetwork();
 	}
 
 	NeuralNetwork::NeuralNetwork(const char* _path) {
-		//deserialise(_path);
+		deserialise(_path);
 	}
 
 	void NeuralNetwork::generateNetwork() {
@@ -28,12 +28,11 @@ namespace ConvexGPU {
 		m_networkErrors.clear();
 
 		for (int i = 1; i < m_networkLength; i++) {
-			//double* weightMatrix = (double*) malloc(sizeof(double) * m_networkStructure.at(i - 1) * m_networkStructure.at(i));
 			Matrix<double> weightMatrix(m_networkStructure.at(i - 1), m_networkStructure.at(i));
 
 			for (int i = 0; i < weightMatrix.dimensions[0]; i++) {
 				for (int j = 0; j < weightMatrix.dimensions[1]; j++) {
-					weightMatrix.at2D(i, j) = randomNumber(-2.0f, 2.0f);
+					weightMatrix.at2D(i, j) = randomNumber(-1.0f, 1.0f);
 				}
 			}
 			weightMatrix.copyMemoryToDevice();
@@ -62,18 +61,18 @@ namespace ConvexGPU {
 
 		m_activations.push_back(*_input);
 		for (int i = _rangeStart; i < _rangeEnd; i++) {
-			//std::cout << "ACTIVATION:" << std::endl;
-			//m_activations[m_activations.size() - 1].print();
-			//std::cout << "WEIGHTS:" << std::endl;
-			//m_weightMatrixes.at(i).print();
-			//std::cout << m_weightMatrixes.at(i) << std::endl;
+			/*std::cout << "ACTIVATION:" << std::endl;
+			m_activations[m_activations.size() - 1].print();
+			std::cout << "WEIGHTS:" << std::endl;
+			m_weightMatrixes.at(i).print();
+			std::cout << m_weightMatrixes.at(i) << std::endl;*/
 
 			timeExecution([this, i]() {
 				m_activations[m_activations.size() - 1].copyMemoryToDevice();
 				m_weightMatrixes.at(i).copyMemoryToDevice();
 				//m_weightMatrixes.at(0).print();
 			}, "=== Memory copy", 2);
-			
+
 			Matrix <double> result;
 			timeExecution([this, i, &result]() {
 				result = matrixMultiply2D(&m_activations[m_activations.size() - 1], &m_weightMatrixes.at(i));
@@ -131,12 +130,12 @@ namespace ConvexGPU {
 							timeExecution([this, &sum, nextLayerErrors, i, j]() {
 								for (int k = 0; k < nextLayerErrors.size(); k++) {
 									//double* weight = getWeight(i + 1, k, i, j);
-									double* weight = &m_weightMatrixes.at(i).at2D(j, k);								
+									double* weight = &m_weightMatrixes.at(i).at2D(j, k);
 									*weight += m_learningRate * nextLayerErrors.at(k) * m_activations.at(i).at2D(0, j);
-						
+
 									sum += *weight * nextLayerErrors.at(k);
 								}
-							}, "======= Train-third", 3);
+							}, "======= Weight loop", 3);
 
 							double currentError = sum * deriveNormalise(m_activations.at(i).at2D(0, j));
 							m_networkErrors.at(i).at(j) = currentError;
@@ -144,38 +143,67 @@ namespace ConvexGPU {
 							m_biasMatrixes.at(i).at(j) += m_learningRate * currentError;
 						}
 					}
-				}, "===== Train-second", 2);
+				}, "===== Layer loop", 2);
 			}
 		}, "=== Train sequence", 1);
 
 		return feedResult;
 	}
 
-	double NeuralNetwork::train(ImageClassDataset* _dataset) {
-		//double cost = 0;
-		//double score = 0;
-		//for (int n = 0; n < _dataset->m_size; n++) {
-		//	std::vector <double> targetResult(10, 0);
-		//	targetResult[_dataset->m_labels[n]] = 1;
-		//	auto feedResult = train(&_dataset->m_imagesFlattened[n], &targetResult);
-		//	cost += m_cost / _dataset->m_size;
-//
-//			std::vector<double>::iterator maxElement = std::max_element(feedResult.begin(), feedResult.end());
-//			int maxElementIndex = std::distance(feedResult.begin(), maxElement);
-//
-//			//std::cout << _dataset->m_labels[n] << ", " << maxElementIndex << std::endl;
-//			if (maxElementIndex == _dataset->m_labels[n]) {
-//				score++;
-//			}
-//
-//			//if (n % 1000 == 0) std::cout << "[CONVEX] Subtrain cycle " << n << ": \t" << m_cost << std::endl;
-//		}
-//		this->m_score = score / _dataset->m_size;
-//		return cost;
-		return 0;
+	double NeuralNetwork::train(ConvexGPU::ImageClassDataset* _dataset, bool _assessPerformance) {
+		if (_assessPerformance == true) {
+			double cost = 0;
+			double score = 0;
+			for (int n = 0; n < _dataset->m_size; n++) {
+				//std::vector <double> targetResult(10, 0);
+				Matrix <double> targetResult(10);
+				targetResult.fill(0);
+				targetResult[_dataset->m_labels[n]] = 1;
+
+				auto feedResult = train(&_dataset->m_imagesFlattened[n], &targetResult);
+				cost += m_cost / _dataset->m_size;
+
+				//TODO: Solve with iterators
+				unsigned int maxElementIndex = 0;
+				double maxElement;
+				for (int i = 0; i < feedResult.size(); i++) {
+					if (i == 0) {
+						maxElement = feedResult[i];
+						maxElementIndex = i;
+					}
+					else if (feedResult[i] > maxElement) {
+						maxElement = feedResult[i];
+						maxElementIndex = i;
+					}
+				}
+
+				//std::vector<double>::iterator maxElement = std::max_element(feedResult.begin(), feedResult.end());
+				//int maxElementIndex = std::distance(feedResult.begin(), maxElement);
+
+				if (maxElementIndex == _dataset->m_labels[n]) {
+					score++;
+				}
+
+				//if (n % 1000 == 0) std::cout << "[CONVEX] Subtrain cycle " << n << ": \t" << m_cost << std::endl;
+			}
+			//this->m_score = score / _dataset->m_size;
+			return cost;
+		}
+		else {
+			double cost = 0;
+			for (int n = 0; n < _dataset->m_size; n++) {
+				Matrix <double> targetResult(10);
+				targetResult.fill(0);
+				targetResult[_dataset->m_labels[n]] = 1;
+
+				//auto feedResult = train(&_dataset->m_imagesFlattened[n], &targetResult);
+				cost += m_cost / _dataset->m_size;
+			}
+			return cost;
+		}
 	}
 
-	void NeuralNetwork::trainSequence(ImageClassDataset* _dataset, int _epochs, const char* _path) {
+	void NeuralNetwork::trainSequence(ConvexGPU::ImageClassDataset* _dataset, int _epochs, const char* _path) {
 		std::cout << "[CONVEX] Training start" << std::endl;
 
 		double minCost = assess(_dataset);
@@ -186,7 +214,7 @@ namespace ConvexGPU {
 			std::cout << "[CONVEX] Train epoch " << n << ": " << cost << " (" << round((float)m_score * 10000) / 100 << "%)" << std::endl;
 
 			if (cost <= minCost) {
-				//serialise(_path);
+				serialise(_path);
 				minCost = cost;
 				nonImprovementCount = 0;
 			}
@@ -194,7 +222,7 @@ namespace ConvexGPU {
 				nonImprovementCount++;
 				if (nonImprovementCount == 16) {
 					double newLearningRate = m_learningRate * 0.90;
-					//deserialise(_path);
+					deserialise(_path);
 					m_learningRate = newLearningRate;
 
 					nonImprovementCount = 0;
@@ -204,7 +232,7 @@ namespace ConvexGPU {
 		}
 	}
 
-	double NeuralNetwork::assess(ImageClassDataset* _dataset) {
+	double NeuralNetwork::assess(ConvexGPU::ImageClassDataset* _dataset) {
 		std::cout << "[CONVEX] Assessing network...";
 
 		double learningRateTemp = m_learningRate;
@@ -230,69 +258,24 @@ namespace ConvexGPU {
 		return result;
 	}
 
-	//TODO add array dimensions object at network generation to solve errors at line 275 and 276 (rowsB and colsB)
-	// OR custom matrix/array class
-	//std::vector<std::vector <double>> NeuralNetwork::matrixMultiply(double* _matrixA, double* _matrixB) {
-		//int rowsA = _matrixA->size();
-		//int colsA = _matrixA->at(0).size();
-		//int rowsB = _matrixB->size();
-		//int colsB = _matrixB->at(0).size();
-		//int rowsC = rowsA;
-		//int colsC = colsB;
-
-		//std::vector <double> aV = flattenVector(*_matrixA);
-		//std::vector <double> bV = flattenVector(*_matrixB);
-		//std::vector<std::vector <double>> cV(rowsC, std::vector <double>(colsC, 0));
-
-		//double* a = &aV[0];
-		//double* b = &bV[0];
-		//double* c = &cV[0][0];
-
-		//double* deviceA;
-		//double* deviceB;
-		//double* deviceC;
-
-		//cudaMalloc((void**) &deviceA, sizeof(double) * rowsA * colsA);
-		//cudaMalloc((void**) &deviceB, sizeof(double) * rowsB * colsB);
-		//cudaMalloc((void**) &deviceC, sizeof(double) * rowsC * colsC);
-
-		//cudaMemcpy(deviceA, &b, bV.size() * sizeof(double), cudaMemcpyHostToDevice);
-		//cudaMemcpy(deviceB, &b, bV.size() * sizeof(double), cudaMemcpyHostToDevice);
-		//cudaMemcpy(deviceC, &c, cV.size() * cV.at(0).size() * sizeof(double), cudaMemcpyHostToDevice);
-
-		//matrixMultiplication(deviceA, deviceB, deviceC, rowsC, colsC);
-
-		//cudaMemcpy(_matrixA, deviceA, _matrixA->size() * sizeof(double), cudaMemcpyDeviceToHost);
-		//cudaMemcpy(_matrixB, deviceB, _matrixB->size() * sizeof(double), cudaMemcpyDeviceToHost);
-		//cudaMemcpy(&c, deviceC, cV.size() * cV.at(0).size() * sizeof(double), cudaMemcpyDeviceToHost);
-
-		//std::vector <double> subresult(c, c + (sizeof (c) / sizeof (double)));
-		//std::vector <std::vector<double>> result(1, subresult);
-		//return result;
-	//}
-
 	void NeuralNetwork::freeMemory() {
 		for (int i = 0; i < m_activations.size() - 2; i++) {
 			m_activations[i].freeMemory();
 		}
 	}
 
-	/*std::ofstream* NeuralNetwork::serialise(std::ofstream* _outputStream, bool _swapEndianness) {
-		char signature[10] = "#ConvexNN";
-		writeVariable(&signature, _outputStream);
+	std::ofstream* NeuralNetwork::serialise(std::ofstream* _stream, bool _swapEndianness) {
+		writeVariable(&m_learningRate, _stream, _swapEndianness);
+		writeVariable(&m_activationFunction, _stream, _swapEndianness);
+		//writeVariable(&m_hardwareMode, _stream, _swapEndianness);
 
-		writeVariable(&m_learningRate, _outputStream);
-		writeVariable(&m_activationFunction, _outputStream);
-		writeVariable(&m_hardwareMode, _outputStream);
+		writeVector(&m_networkStructure, _stream, _swapEndianness);
+		writeVector(&m_biasMatrixes, _stream, _swapEndianness);
+		writeMatrixVector(&m_weightMatrixes, _stream, _swapEndianness);
 
-		writeVector(&m_networkStructure, _outputStream);
-		writeVector(&m_biasMatrixes, _outputStream);
-		writeVector(&m_weightMatrixes, _outputStream);
-
-		return _outputStream;
-	}*/
-
-	/*void NeuralNetwork::serialise(const char * _path, bool _swapEndianness) {
+		return _stream;
+	}
+	void NeuralNetwork::serialise(const char * _path, bool _swapEndianness) {
 		std::cout << "[CONVEX] Saving network to " << _path << "...";
 
 		std::ofstream file;
@@ -302,23 +285,33 @@ namespace ConvexGPU {
 
 		std::cout << " done" << std::endl;
 		file.close();
-	}*/
+	}
 
-	/*std::ifstream* NeuralNetwork::deserialise(std::ifstream* _inputStream, bool _swapEndianness) {
-		_inputStream->seekg(10, std::ios::cur);
+	std::ifstream* NeuralNetwork::deserialise(std::ifstream* _stream, bool _swapEndianness) {
+		readVariable(&m_learningRate, _stream, _swapEndianness);
+		readVariable(&m_activationFunction, _stream, _swapEndianness);
+		//readVariable(&m_hardwareMode, _stream, _swapEndianness);
 
-		readVariable(&m_learningRate, _inputStream);
-		readVariable(&m_activationFunction, _inputStream);
-		readVariable(&m_hardwareMode, _inputStream);
+		m_networkStructure.clear();
+		readVector(&m_networkStructure, _stream, _swapEndianness);
+		m_biasMatrixes.clear();
+		readVector(&m_biasMatrixes, _stream, _swapEndianness);
+		m_weightMatrixes.clear();
+		readMatrixVector(&m_weightMatrixes, _stream, _swapEndianness);
 
-		readVector(&m_networkStructure, _inputStream);
-		readVector(&m_biasMatrixes, _inputStream);
-		readVector(&m_weightMatrixes, _inputStream);
+		m_networkErrors.clear();
 
-		return _inputStream;
-	}*/
+		for (int i = 0; i < m_networkLength; i++) {
+			std::vector <double> errorMatrix;
+			for (int j = 0; j < m_networkStructure.at(i); j++) {
+				errorMatrix.push_back(0);
+			}
+			m_networkErrors.push_back(errorMatrix);
+		}
 
-	/*void NeuralNetwork::deserialise(const char* _path, bool _swapEndianness) {
+		return _stream;
+	}
+	void NeuralNetwork::deserialise(const char* _path, bool _swapEndianness) {
 		std::cout << "[CONVEX] Loading network from " << _path << "...";
 
 		std::ifstream file;
@@ -332,9 +325,9 @@ namespace ConvexGPU {
 		}
 		else {
 			std::cout << " failed" << std::endl;
-			std::cout << "[CONVEX] ERROR: Could not open " << _path << std::endl;
+			std::cerr << "[CONVEX] ERROR: Could not open " << _path << std::endl;
 		}
-	}*/
+	}
 
 	double NeuralNetwork::normalise(double _input) {
 		switch (m_activationFunction) {
@@ -351,7 +344,7 @@ namespace ConvexGPU {
 			return _input;
 			break;
 		default:
-			std::cout << "[CONVEX ERROR] Invalid activation function" << std::endl;
+			std::cerr << "[CONVEX ERROR] Invalid activation function" << std::endl;
 			return 0;
 			break;
 		}
@@ -360,7 +353,7 @@ namespace ConvexGPU {
 	double NeuralNetwork::deriveNormalise(double _input) {
 		switch (m_activationFunction) {
 		case SIGMOID:
-			return (1 / (1 + exp(-_input)))*(1-(1 / (1 + exp(-_input))));
+			return (1 / (1 + exp(-_input)))*(1 - (1 / (1 + exp(-_input))));
 			//return _input * (1 - _input);
 			break;
 		case TANH:
@@ -373,7 +366,7 @@ namespace ConvexGPU {
 			return _input;
 			break;
 		default:
-			std::cout << "[CONVEX ERROR] Invalid activation function" << std::endl;
+			std::cerr << "[CONVEX ERROR] Invalid activation function" << std::endl;
 			return 0;
 			break;
 		}
@@ -381,5 +374,138 @@ namespace ConvexGPU {
 
 	double* NeuralNetwork::getWeight(int _n1Layer, int _n1Neuron, int _n2Layer, int _n2Neuron) {
 		return &m_weightMatrixes.at(_n2Layer).at2D(_n2Neuron, _n1Neuron);
+	}
+
+
+	ImageClassDataset::ImageClassDataset() {
+		return;
+	}
+
+	ImageClassDataset::ImageClassDataset(const char* _imagePath, const char* _labelPath, bool _swapEndianness) {
+		deserialiseMNIST(_imagePath, _labelPath, _swapEndianness);
+	}
+
+	std::ifstream* ImageClassDataset::deserialiseMNISTImages(std::ifstream* _inputStream, bool _swapEndianness) {
+		_inputStream->seekg(4, std::ios::cur);
+		readVariable(&m_size, _inputStream, true);
+		readVariable(&m_rows, _inputStream, true);
+		readVariable(&m_columns, _inputStream, true);
+		std::cout << "[CONVEX] Loading MNIST image file...";
+		//std::cout << "[CONVEX] Size: \t\t" << m_size << std::endl;
+		//std::cout << "[CONVEX] Rows: \t\t" << m_rows << std::endl;
+		//std::cout << "[CONVEX] Columns: \t" << m_columns << std::endl;
+
+		for (int n = 1; n <= m_size; n++) {
+			//std::vector <std::vector<double>> image;
+			Matrix <double> image(m_rows, m_columns);
+			for (int y = 0; y < m_rows; y++) {
+				//std::vector <double> row;
+				for (int x = 0; x < m_columns; x++) {
+					unsigned char value;
+					readVariable(&value, _inputStream, true);
+					image.at(y, x) = value;
+					//row.push_back((double)value);
+				}
+				//image.push_back(row);
+			}
+			m_images.push_back(image);
+			//if (n % 1000 == 0) std::cout << "[CONVEX] " << n << "\t (" << round((float)n / m_size * 1000) / 10 << "%)" << std::endl;
+		}
+
+		std::cout << " done" << std::endl;
+
+		return _inputStream;
+	}
+
+	void ImageClassDataset::deserialiseMNISTImages(const char* _path, bool _swapEndianness) {
+		std::ifstream imageFileStream;
+		imageFileStream.open(_path, std::ios::binary);
+
+		if (imageFileStream.is_open()) {
+			deserialiseMNISTImages(&imageFileStream);
+			imageFileStream.close();
+		}
+		else {
+			std::cout << " failed" << std::endl;
+			std::cout << "[CONVEX] ERROR: Could not open " << _path << std::endl;
+		}
+	}
+
+	std::ifstream* ImageClassDataset::deserialiseMNISTLabels(std::ifstream* _inputStream, bool _swapEndianness) {
+		_inputStream->seekg(4, std::ios::cur);
+		readVariable(&m_size, _inputStream, _swapEndianness);
+
+		std::cout << "[CONVEX] Loading MNIST label file...";
+
+		for (int n = 0; n < m_size; n++) {
+			unsigned char label;
+			readVariable(&label, _inputStream, _swapEndianness);
+			m_labels.push_back(label);
+		}
+
+		std::cout << " done" << std::endl;
+
+		return _inputStream;
+	}
+
+	void ImageClassDataset::deserialiseMNISTLabels(const char* _path, bool _swapEndianness) {
+		std::ifstream labelFileStream;
+		labelFileStream.open(_path, std::ios::binary);
+
+		if (labelFileStream.is_open()) {
+			deserialiseMNISTImages(&labelFileStream);
+			labelFileStream.close();
+		}
+		else {
+			std::cout << " failed" << std::endl;
+			std::cerr << "[CONVEX] ERROR: Could not open " << _path << std::endl;
+		}
+	}
+
+	void ImageClassDataset::deserialiseMNIST(const char* _imagePath, const char* _labelPath, bool _swapEndianness) {
+		std::ifstream imageFileStream;
+		imageFileStream.open(_imagePath, std::ios::binary);
+
+		if (imageFileStream.is_open()) {
+			deserialiseMNISTImages(&imageFileStream, _swapEndianness);
+			imageFileStream.close();
+		}
+		else {
+			std::cout << " failed" << std::endl;
+			std::cerr << "[CONVEX] ERROR: Could not open " << _imagePath << std::endl;
+		}
+
+		std::ifstream labelFileStream;
+		labelFileStream.open(_labelPath, std::ios::binary);
+
+		if (labelFileStream.is_open()) {
+			deserialiseMNISTLabels(&labelFileStream, _swapEndianness);
+			labelFileStream.close();
+		}
+		else {
+			std::cout << " failed" << std::endl;
+			std::cerr << "[CONVEX] ERROR: Could not open " << _labelPath << std::endl;
+		}
+	}
+
+	void ImageClassDataset::flatten() {
+		for (int i = 0; i < m_size; i++) {
+			m_imagesFlattened.push_back(m_images.at(i).flatten());
+		}
+		m_images.clear();
+	}
+
+	/*void ImageClassDataset::flattenMatrix() {
+		for (int i = 0; i < m_size; i++) {
+			//m_imagesFlattenedMatrix.push_back(flattenVector(m_images.at(i)));
+		}
+		m_images.clear();
+	}*/
+
+	void ImageClassDataset::shuffle() {
+		unsigned seed = std::chrono::system_clock::now()
+			.time_since_epoch()
+			.count();
+		std::shuffle(std::begin(m_imagesFlattened), std::end(m_imagesFlattened), std::default_random_engine(seed));
 	}
 }

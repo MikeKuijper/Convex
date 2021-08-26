@@ -1,5 +1,6 @@
 #pragma once
 #include "Convex.h"
+#include "Matrix.h"
 #include <initializer_list>
 
 #include <cuda_runtime.h>
@@ -20,194 +21,35 @@ namespace ConvexGPU {
 	void testSetupIncrement();
 	void testSetupMatrixMultiply();
 
-	template<class T>
-	class Matrix {
+	Matrix <double> matrixMultiply2D(Matrix <double> *a, Matrix <double> *b);
+
+	class ImageClassDataset {
 	public:
-		std::vector <int> dimensions;
-		std::vector <int> dimensionsReversed;
-		T* m_hostData;
-		T* m_deviceData;
-		int m_size;
+		std::vector <Matrix <double>> m_images;
+		std::vector <Matrix <double>> m_imagesFlattened;
+		std::vector <unsigned int> m_labels;
+		uint32_t m_size;
+		uint32_t m_rows;
+		uint32_t m_columns;
 
-		Matrix() {
-			return;
-		}
+		ImageClassDataset();
+		ImageClassDataset(const char* _imagePath, const char* _labelPath, bool _swapEndianness);
 
-		~Matrix() {
-			//cudaFree(m_deviceData);
-			//freeMemory();
-		}
+		std::ifstream* deserialiseMNISTImages(std::ifstream* _inputStream, bool _swapEndianness = false);
+		void deserialiseMNISTImages(const char* _path, bool _swapEndianness = false);
+		//std::ifstream* deserialiseMNISTImagesMatrix(std::ifstream* _inputStream, bool _swapEndianness = false);
+		//void deserialiseMNISTImagesMatrix(const char* _path, bool _swapEndianness = false);
+		std::ifstream* deserialiseMNISTLabels(std::ifstream* _inputStream, bool _swapEndianness = false);
+		void deserialiseMNISTLabels(const char* _path, bool _swapEndianness = false);
 
-		Matrix(std::vector<int> dim) {
-			dimensions = dim;
-			dimensionsReversed = dim;
+		void deserialiseMNIST(const char* _imagePath, const char* _labelPath, bool _swapEndianness = false);
 
-			std::reverse(dimensionsReversed.begin(), dimensionsReversed.end());
+		void flatten();
+		void flattenMatrix();
 
-			int size = 1;
-			for (int i = 0; i < dimensionsReversed.size(); i++) {
-				size *= dimensionsReversed.at(i);
-			}
-
-			m_hostData = (T*)malloc(sizeof(T) * size);
-			cudaMallocManaged((void**)&m_deviceData, sizeof(T) * size);
-
-			cudaDeviceSynchronize();
-			m_size = size;
-
-			//std::cout << "[CONVEX] Allocated " << size * sizeof(T) << " bytes of GPU memory for " << size << " elements" << std::endl;
-		}
-
-		//TODO: allow for use with standard memory and AMD GPUs
-		template <typename... Args>
-		Matrix(Args... dims) {
-			dimensionsReversed = { static_cast<int>(dims)... };
-			dimensions = { static_cast<int>(dims)... };
-
-			std::reverse(dimensionsReversed.begin(), dimensionsReversed.end());
-
-			int size = 1;
-			for (int i = 0; i < dimensions.size(); i++) {
-				size *= dimensions.at(i);
-			}
-
-			m_hostData = (T*)malloc(sizeof(T) * size);
-			cudaMallocManaged((void**)&m_deviceData, sizeof(T) * size);
-
-			cudaDeviceSynchronize();
-			m_size = size;
-
-			//std::cout << "[CONVEX] Allocated " << size * sizeof(T) << " bytes of GPU memory for " << size << " elements" << std::endl;
-		}
-
-		void flatten() {
-			dimensions = { m_size };
-			dimensionsReversed = { m_size };
-		}
-
-		void addDimension() {
-			dimensions.insert(dimensionsReversed.begin(), 1);
-			dimensionsReversed.push_back(1);
-		}
-
-		template <typename... Args>
-		int getIndex(Args... indexes) {
-			std::vector <int> dim = { indexes... };
-			return getIndex(dim);
-		}
-
-		// TODO: Speed this the C up
-		int getIndex(std::vector<int> dim) {
-			std::reverse(dim.begin(), dim.end());
-
-			int n = 0;
-			for (int i = 0; i < dim.size(); i++) {
-				int sum = 1;
-				for (int j = 0; j < i; j++) {
-					sum *= dimensionsReversed[j];
-				}
-				n += sum * dim[i];
-			}
-
-			return n;
-		}
-
-		int getIndex2D(int x, int y) {
-			return dimensions.at(0) * x + y;
-		}
-
-		int size() {
-			return m_size;
-		}
-
-		void fill(T value) {
-			for (int i = 0; i < m_size; i++) {
-				//*(m_data + i * sizeof(T)) = value;
-				this->operator[](i) = value;
-			}
-			copyMemoryToDevice();
-			//std::cout << "[CONVEX] Filled array with " << m_size << " elements of value " << value << std::endl;
-		}
-
-		void print() {
-			std::cout << "[";
-			for (int i = 0; i < dimensions[0]; i++) {
-				if (i != 0) std::cout << " ";
-				std::cout << "[";
-				for (int j = 0; j < dimensions[1]; j++) {
-					std::cout << at(i, j);
-					if (j != dimensions[1] - 1) std::cout << ", ";
-				}
-				std::cout << "]";
-				if (i != dimensions[0] - 1) std::cout << ", \n";
-			}
-			std::cout << "]" << std::endl;
-		}
-
-		void copyMemoryToHost() {
-			//std::cout << "[CONVEX] Copying " << m_size * sizeof(T) << " bytes to host" << std::endl;
-			cudaError_t res = cudaMemcpy(m_hostData, m_deviceData, m_size * sizeof(T), cudaMemcpyDeviceToHost);
-			if (res != cudaSuccess) {
-				std::cerr << "[CONVEX ERROR] CUDA error " << res << std::endl;
-				throw std::runtime_error("Failed to copy to host memory");
-			}
-		}
-
-		void copyMemoryToDevice() {
-			//std::cout << "[CONVEX] Copying " << m_size * sizeof(T) << " bytes to device" << std::endl;
-			cudaError_t res = cudaMemcpy(m_deviceData, m_hostData, m_size * sizeof(T), cudaMemcpyHostToDevice);
-			if (res != cudaSuccess) {
-				std::cerr << "[CONVEX ERROR] CUDA error " << res << std::endl;
-				throw std::runtime_error("Failed to copy to device memory");
-			}
-		}
-
-		void freeMemory() {
-			free(m_hostData);
-			cudaFree(m_deviceData);
-		}
-
-		// TODO: improve error handling for dims that have an i < m_size, but have invalid coordinates eg [0, 3] in a 2x2 matrix
-		template <typename... Args>
-		T& at(Args... indexes) {
-			int i = getIndex(indexes...);
-			if (i <= m_size) return this->operator[](i);
-			else {
-				std::cerr << "[ERROR] Index " << i << " exceeds array bounds" << std::endl;
-				throw std::out_of_range("Index exceeds array bounds");
-			}
-		}
-
-		T& at(std::vector <int> dim) {
-			int i = getIndex(dim);
-			if (i <= m_size) return this->operator[](i);
-			else {
-				std::cerr << "[ERROR] Index " << i << " exceeds array bounds" << std::endl;
-				throw std::out_of_range("Index exceeds array bounds");
-			}
-		}
-
-		T& at2D(int x, int y) {
-			int i = getIndex2D(x, y);
-			if (i <= m_size) return this->operator[](i);
-			else {
-				std::cerr << "[ERROR] Index " << i << " exceeds array bounds" << std::endl;
-				throw std::out_of_range("Index exceeds array bounds");
-			}
-		}
-
-		//This intentionally doesn't execute the copyMemoryToDevice, since it would be very inefficient
-		T& operator[] (int i) {
-			if (i < m_size && i >= 0) return m_hostData[i];
-			else throw std::out_of_range("Index exceeds array bounds");
-		}
-		const T& operator[] (int i) const {
-			if (i < m_size && i >= 0) return m_hostData[i];
-			else throw std::out_of_range("Index exceeds array bounds");
-		}
+		void shuffle();
 	};
 
-	Matrix <double> matrixMultiply2D(Matrix <double> *a, Matrix <double> *b);
 
 	class NeuralNetwork {
 	public:
@@ -219,7 +61,7 @@ namespace ConvexGPU {
 		double m_globalError;
 
 		activationFunction m_activationFunction;
-		hardwareMode m_hardwareMode;
+		//hardwareMode m_hardwareMode;
 
 		std::vector <Matrix<double>> m_weightMatrixes;
 		std::vector <std::vector <double>> m_biasMatrixes;
@@ -234,19 +76,19 @@ namespace ConvexGPU {
 		Matrix<double> feed(Matrix<double>* _input, int _rangeStart, int _rangeEnd);
 		Matrix<double> train(Matrix<double>* _input, Matrix<double>* _targetOutput);
 		Matrix<double> train(Matrix<double>* _input, Matrix<double>* _targetOutput, int _rangeStart, int _rangeEnd);
-		double train(ImageClassDataset* _dataset);
-		void trainSequence(ImageClassDataset* _dataset, int _epochs, const char* _path);
-		double assess(ImageClassDataset* _dataset);
+		double train(ConvexGPU::ImageClassDataset* _dataset, bool _assessPerformance = false);
+		void trainSequence(ConvexGPU::ImageClassDataset* _dataset, int _epochs, const char* _path);
+		double assess(ConvexGPU::ImageClassDataset* _dataset);
 
 		std::vector <std::vector <double>> matrixMultiply(std::vector<std::vector <double>>* _matrixA, std::vector<std::vector <double>>* _matrixB);
 
 		void freeMemory();
 
-		//std::ofstream* serialise(std::ofstream* _outputStream, bool _swapEndianness = false);
-		//void serialise(const char * _path, bool _swapEndianness = false);
+		std::ofstream* serialise(std::ofstream* _outputStream, bool _swapEndianness = false);
+		void serialise(const char * _path, bool _swapEndianness = false);
 
-		//std::ifstream* deserialise(std::ifstream* _inputStream, bool _swapEndianness = false);
-		//void deserialise(const char* _path, bool _swapEndianness = false);
+		std::ifstream* deserialise(std::ifstream* _inputStream, bool _swapEndianness = false);
+		void deserialise(const char* _path, bool _swapEndianness = false);
 
 		double normalise(double _input);
 		double deriveNormalise(double _input);

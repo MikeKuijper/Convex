@@ -1,12 +1,5 @@
 #pragma once
-#include <vector>
-#include <iostream>
-#include <random>
-#include <algorithm>
-#include <fstream>
-#include <stdlib.h>
-#include <stdio.h>
-#include <chrono>
+#include "Common.h"
 
 //TO DO:
 // * Error handling
@@ -21,22 +14,15 @@
 namespace Convex {
 	//char VERSION[16] = "v1.0.0a";
 
-	int debugMode = 2;
-
-	double randomNumber(double _min, double _max) {
-		std::random_device rd;
-		std::mt19937 gen(rd());
-		std::uniform_real_distribution<> dis(_min, _max);
-		return dis(gen);
-	}
+	int debugMode = 0; //2
 
 	enum activationFunction : unsigned char {
 		SIGMOID = 0, TANH, RELU, NONE
 	};
 
-	enum hardwareMode : unsigned char {
-		CPU = 0, CPU_MT, GPU_CUDA
-	};
+	/*enum hardwareMode : unsigned char {
+		CPU = 0, CPU_MT
+	};*/
 
 	class ImageClassDataset {
 	public:
@@ -52,12 +38,17 @@ namespace Convex {
 
 		std::ifstream* deserialiseMNISTImages(std::ifstream* _inputStream, bool _swapEndianness = false);
 		void deserialiseMNISTImages(const char* _path, bool _swapEndianness = false);
+		//std::ifstream* deserialiseMNISTImagesMatrix(std::ifstream* _inputStream, bool _swapEndianness = false);
+		//void deserialiseMNISTImagesMatrix(const char* _path, bool _swapEndianness = false);
 		std::ifstream* deserialiseMNISTLabels(std::ifstream* _inputStream, bool _swapEndianness = false);
 		void deserialiseMNISTLabels(const char* _path, bool _swapEndianness = false);
 
 		void deserialiseMNIST(const char* _imagePath, const char* _labelPath, bool _swapEndianness = false);
 
 		void flatten();
+		void flattenMatrix();
+
+		void shuffle();
 	};
 
 	class NeuralNetwork {
@@ -70,7 +61,7 @@ namespace Convex {
 		double m_globalError;
 
 		activationFunction m_activationFunction;
-		hardwareMode m_hardwareMode;
+		//hardwareMode m_hardwareMode;
 
 		std::vector <std::vector <std::vector <double>>> m_weightMatrixes;
 		std::vector <std::vector <double>> m_biasMatrixes;
@@ -82,12 +73,12 @@ namespace Convex {
 		NeuralNetwork(const char* _path);
 		void generateNetwork();
 		std::vector <double> feed(std::vector <double>* _input);
-		std::vector <double> feed(std::vector <double>* _input, int _rangeStart, int _rangeEnd);
+		std::vector <double> feed(std::vector <double>* _input, unsigned int _rangeStart, unsigned int _rangeEnd);
 		std::vector <double> train(std::vector <double>* _input, std::vector <double>* _targetOutput);
 		std::vector <double> train(std::vector <double>* _input, std::vector <double>* _targetOutput, int _rangeStart, int _rangeEnd);
-		double train(ImageClassDataset* _dataset);
-		void trainSequence(ImageClassDataset* _dataset, int _epochs, const char* _path);
-		double assess(ImageClassDataset* _dataset);
+		double train(Convex::ImageClassDataset* _dataset, bool _assessPerformance = false);
+		void trainSequence(Convex::ImageClassDataset* _dataset, int _epochs, const char* _path);
+		double assess(Convex::ImageClassDataset* _dataset);
 
 		std::vector <std::vector <double>> matrixMultiply(std::vector<std::vector <double>>* _matrixA, std::vector<std::vector <double>>* _matrixB);
 
@@ -106,7 +97,7 @@ namespace Convex {
 
 	class AutoEncoder {
 	public:
-		int m_sharedLayer;
+		unsigned int m_sharedLayer;
 		double m_learningRate;
 		activationFunction m_activationFunction;
 		std::vector <int> m_fullNetworkStructure;
@@ -129,40 +120,12 @@ namespace Convex {
 		std::vector <double> feed(std::vector <double>* _input);
 		double train(std::vector <double>* _input);
 
-		std::ofstream* serialise(std::ofstream* _outputStream);
+		std::ofstream* serialise(std::ofstream* _outputStream, bool _swapEndianness = false);
 		void serialise(const char * _path);
 
-		std::ifstream* deserialise(std::ifstream* _inputStream);
+		std::ifstream* deserialise(std::ifstream* _inputStream, bool _swapEndianness = false);
 		void deserialise(const char* _path);
 	};
-
-	double randomNumber(double _min, double _max);
-
-	template <class variableType>
-	void writeVariable(variableType* _variable, std::ofstream* _fs, bool _swapEndianness = false);
-	template <class variableType>
-	variableType readVariable(variableType* _variable, std::ifstream* _fs, bool _swapEndianness = false);
-
-	template <class number>
-	void writeVector(std::vector <number>* _vector, std::ofstream* _fs, bool _swapEndianness = false);
-	template <class number>
-	void writeVector(std::vector <std::vector <number>>* _vector, std::ofstream* _fs, bool _swapEndianness = false);
-	template <class number>
-	void writeVector(std::vector <std::vector <std::vector <number>>>* _vector, std::ofstream* _fs, bool _swapEndianness = false);
-
-	template <typename number>
-	void readVector(std::vector <number>* _vector, std::ifstream* _fs);
-	template <typename number>
-	void readVector(std::vector <std::vector <number>>* _vector, std::ifstream* _fs);
-
-	template <class number>
-	std::vector<number> subVector(std::vector <number>* _vector, int _i, int _j);
-
-	template <class variable>
-	void endianSwap(variable *objp);
-
-	template <typename T>
-	std::vector<T> flattenVector(const std::vector<std::vector<T>>& v);
 }
 
 template <typename Function>
@@ -173,7 +136,7 @@ double timeExecution(Function f, const char* text) {
 	auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 	std::cout << "[CONVEX] " << text << ": " << duration.count() / 1000.0f << " ms" << std::endl;
 
-	return duration.count();
+	return (double) duration.count();
 }
 
 template <typename Function>
