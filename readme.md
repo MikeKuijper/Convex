@@ -9,7 +9,7 @@ The following example demonstrates the use of the ImageClassDataset object to tr
 ```cpp
     ConvexGPU::ImageClassDataset mnist("./t10k-images.idx3-ubyte", "./t10k-labels.idx1-ubyte", true);
     mnist.flatten();
-    Convex::NeuralNetwork n({28*28, 10}, ConvexGPU::CPU);
+    ConvexGPU::NeuralNetwork n({28*28, 10}, ConvexGPU::CPU);
     n.trainSequence(&mnist, 10000, "./mnist.bin");
 ```
 
