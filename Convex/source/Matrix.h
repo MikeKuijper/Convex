@@ -1,34 +1,22 @@
 #pragma once
 #include "Common.h"
-#include "ConvexGPU.h"
-#include <cuda_runtime.h>
-#include <device_launch_parameters.h>
 
-
-//TODO: implement some kind of mode to enable/disable device memory usage.
-
-namespace ConvexGPU {
-	enum hardwareMode : unsigned char {
-		CUDA = 0, CPU
-	};
-
+namespace Convex {
 	template<class T>
 	class Matrix {
 	public:
 		std::vector <unsigned int> dimensions;
 		std::vector <unsigned int> dimensionsReversed;
 		T* m_hostData;
-		T* m_deviceData;
 		unsigned int m_size;
-		hardwareMode m_hardwareMode = CPU;
 
 		Matrix() {
 			return;
 		}
 
 		~Matrix() {
-			//freeMemoryCPU();
-			//std::cout << "*fucking dies*" << std::endl;
+			//cudaFree(m_deviceData);
+			//freeMemory();
 		}
 
 		//TODO: allow for use with standard memory and AMD GPUs
@@ -43,9 +31,6 @@ namespace ConvexGPU {
 			}
 
 			m_hostData = (T*)malloc(sizeof(T) * size);
-			cudaMallocManaged((void**)&m_deviceData, sizeof(T) * size);
-
-			cudaDeviceSynchronize();
 			m_size = size;
 		}
 		// TODO Fix duplicate code
@@ -62,14 +47,7 @@ namespace ConvexGPU {
 			}
 
 			m_hostData = (T*)malloc(sizeof(T) * size);
-			cudaMallocManaged((void**)&m_deviceData, sizeof(T) * size);
-
-			cudaDeviceSynchronize();
 			m_size = size;
-		}
-
-		Matrix(std::ifstream* _stream, bool _swapEndianness = false) {
-			deserialise(_stream, _swapEndianness);
 		}
 
 		Matrix& flatten() {
@@ -115,7 +93,6 @@ namespace ConvexGPU {
 			for (unsigned int i = 0; i < m_size; i++) {
 				this->operator[](i) = value;
 			}
-			if (m_hardwareMode == CUDA) copyMemoryToDevice();
 			return *this;
 		}
 
@@ -132,23 +109,6 @@ namespace ConvexGPU {
 				if (i != dimensions[0] - 1) std::cout << ", \n";
 			}
 			std::cout << "]" << std::endl;
-		}
-
-		void copyMemoryToHost() {
-			//std::cout << "[CONVEX] Copying " << m_size * sizeof(T) << " bytes to host" << std::endl;
-			cudaError_t res = cudaMemcpy(m_hostData, m_deviceData, m_size * sizeof(T), cudaMemcpyDeviceToHost);
-			if (res != cudaSuccess) {
-				std::cerr << "[CONVEX ERROR] CUDA error " << res << std::endl;
-				throw std::runtime_error("Failed to copy to host memory");
-			}
-		}
-		void copyMemoryToDevice() {
-			//std::cout << "[CONVEX] Copying " << m_size * sizeof(T) << " bytes to device" << std::endl;
-			cudaError_t res = cudaMemcpy(m_deviceData, m_hostData, m_size * sizeof(T), cudaMemcpyHostToDevice);
-			if (res != cudaSuccess) {
-				std::cerr << "[CONVEX ERROR] CUDA error " << res << std::endl;
-				throw std::runtime_error("Failed to copy to device memory");
-			}
 		}
 
 		std::ofstream* serialise(std::ofstream* _stream, bool _swapEndianness = false) {
@@ -173,9 +133,6 @@ namespace ConvexGPU {
 		std::ifstream* deserialise(std::ifstream* _stream, bool _swapEndianness = false) {
 			dimensions.clear();
 			readVector(&dimensions, _stream, _swapEndianness);
-			dimensionsReversed = dimensions;
-			std::reverse(dimensionsReversed.begin(), dimensionsReversed.end());
-
 			unsigned int size;
 			readVariable(&size, _stream, _swapEndianness);
 
@@ -214,21 +171,7 @@ namespace ConvexGPU {
 		}
 
 		void freeMemory() {
-			if (m_hardwareMode == CUDA) {
-				freeMemoryGPU();
-			}
-			else if (m_hardwareMode == CPU) {
-				freeMemoryCPU();
-			}
-		}
-
-		void freeMemoryGPU() {
 			free(m_hostData);
-			cudaFree(m_deviceData);
-		}
-
-		void freeMemoryCPU() {
-			free(m_hostData); //_CrtIsValidHeapPointer(block)
 		}
 
 		// TODO: improve error handling for dims that have an i < m_size, but have invalid coordinates eg [0, 3] in a 2x2 matrix
@@ -253,7 +196,7 @@ namespace ConvexGPU {
 			int i = getIndex2D(x, y);
 			if (i < m_size) return this->operator[](i); // changed from <= since it makes more sense; not tested yet
 			else {
-				std::cerr << "[ERROR] Index " << i << " (" << x << ", " << y << "): exceeds array bounds (" << m_size << ")" << std::endl;
+				std::cerr << "[ERROR] Index " << i << " exceeds array bounds" << std::endl;
 				throw std::out_of_range("Index exceeds array bounds");
 			}
 		}

@@ -92,7 +92,7 @@
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)ConvexGPU\source</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)ConvexGPU\source;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -111,7 +111,7 @@
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)ConvexGPU\source</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)ConvexGPU\source;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -132,7 +132,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)ConvexGPU\source</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)ConvexGPU\source;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -155,7 +155,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)ConvexGPU\source</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)ConvexGPU\source;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -170,13 +170,6 @@
       <AdditionalLibraryDirectories>$(SolutionDir)Convex\bin\$(Platform)\$(Configuration);$(CudaToolkitBinDir)/crt</AdditionalLibraryDirectories>
     </CudaLink>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClCompile Include="source\Convex.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="source\Convex.h" />
-    <ClInclude Include="source\Common.h" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 11.1.targets" />

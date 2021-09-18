@@ -25,5 +25,16 @@
     <ClInclude Include="source\Matrix.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="source\Common.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="source\ImageClassDataset.cu">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\AutoEncoder.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

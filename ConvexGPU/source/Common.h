@@ -37,7 +37,6 @@ void writeCustom(variableType* _variable, unsigned int _size, std::ofstream* _fs
 
 template <class variableType>
 variableType readVariable(variableType* _variable, std::ifstream* _fs, bool _swapEndianness) {
-	std::cout << _fs->tellg() << std::endl;
 	_fs->read(reinterpret_cast<char*> (_variable), sizeof(*_variable));
 	if (_swapEndianness) endianSwap(_variable);
 	return *_variable;
@@ -45,7 +44,6 @@ variableType readVariable(variableType* _variable, std::ifstream* _fs, bool _swa
 
 template <class variableType>
 variableType readCustom(variableType* _variable, unsigned int _size, std::ifstream* _fs, bool _swapEndianness) {
-	std::cout << _fs->tellg() << std::endl;
 	_fs->read(reinterpret_cast<char*> (_variable), _size);
 	if (_swapEndianness) endianSwap(_variable);
 	return *_variable;
@@ -53,7 +51,7 @@ variableType readCustom(variableType* _variable, unsigned int _size, std::ifstre
 
 template <class number>
 void writeVector(std::vector <number>* _vector, std::ofstream* _fs, bool _swapEndianness) {
-	unsigned int vectorSize = (unsigned int) _vector->size();
+	unsigned int vectorSize = (unsigned int)_vector->size();
 	writeVariable(&vectorSize, _fs, _swapEndianness);
 
 	for (int i = 0; i < vectorSize; i++) {
@@ -63,7 +61,7 @@ void writeVector(std::vector <number>* _vector, std::ofstream* _fs, bool _swapEn
 
 template <class number>
 void writeVector(std::vector <std::vector <number>>* _vector, std::ofstream* _fs, bool _swapEndianness) {
-	unsigned int vectorSize = (unsigned int) _vector->size();
+	unsigned int vectorSize = (unsigned int)_vector->size();
 	writeVariable(&vectorSize, _fs, _swapEndianness);
 
 	for (int i = 0; i < vectorSize; i++) {
@@ -73,7 +71,7 @@ void writeVector(std::vector <std::vector <number>>* _vector, std::ofstream* _fs
 
 template <class number>
 void writeVector(std::vector <std::vector <std::vector <number>>>* _vector, std::ofstream* _fs, bool _swapEndianness) {
-	unsigned int vectorSize = (unsigned int) _vector->size();
+	unsigned int vectorSize = (unsigned int)_vector->size();
 	writeVariable(&vectorSize, _fs, _swapEndianness);
 
 	for (int i = 0; i < vectorSize; i++) {
@@ -82,12 +80,33 @@ void writeVector(std::vector <std::vector <std::vector <number>>>* _vector, std:
 }
 
 template <class Matrix>
-void writeMatrixVector(std::vector <Matrix>* _vector, std::ofstream* _fs, bool _swapEndianness) {
-	unsigned int vectorSize = (unsigned int) _vector->size();
+void writeMatrixVector(std::vector <Matrix*>* _vector, std::ofstream* _fs, bool _swapEndianness) {
+	unsigned int vectorSize = (unsigned int)_vector->size();
 	writeVariable(&vectorSize, _fs, _swapEndianness);
 
 	for (int i = 0; i < vectorSize; i++) {
-		_vector->at(i).serialise(_fs, _swapEndianness);
+		_vector->at(i)->serialise(_fs, _swapEndianness);
+	}
+}
+
+template <class Matrix>
+void readMatrixVector(std::vector <Matrix*>* _vector, std::ifstream* _fs, bool _swapEndianness) {
+	unsigned int vectorSize;
+	readVariable(&vectorSize, _fs, _swapEndianness);
+
+	for (int i = 0; i < vectorSize; i++) {
+		Matrix* m = new Matrix(_fs, _swapEndianness);
+		_vector->push_back(m);
+	}
+}
+
+/* template <class Matrix>
+void writeMatrixVector(std::vector <Matrix>* _vector, std::ofstream* _fs, bool _swapEndianness) {
+	unsigned int vectorSize = (unsigned int)_vector->size();
+	writeVariable(&vectorSize, _fs, _swapEndianness);
+
+	for (int i = 0; i < vectorSize; i++) {
+		_vector->at(i)->serialise(_fs, _swapEndianness);
 	}
 }
 
@@ -95,21 +114,17 @@ template <class Matrix>
 void readMatrixVector(std::vector <Matrix>* _vector, std::ifstream* _fs, bool _swapEndianness) {
 	unsigned int vectorSize;
 	readVariable(&vectorSize, _fs, _swapEndianness);
-	std::cout << "MINOR: " << vectorSize << std::endl;
 
 	for (int i = 0; i < vectorSize; i++) {
-		Matrix m;
-		m.deserialise(_fs, _swapEndianness);
+		Matrix m(_fs, _swapEndianness);
 		_vector->push_back(m);
 	}
-}
-
+} */
 
 template <typename number>
 void readVector(std::vector <number>* _vector, std::ifstream* _fs, bool _swapEndianness) {
 	unsigned int vectorSize;
 	readVariable(&vectorSize, _fs, _swapEndianness);
-	std::cout << "MINOR: " << vectorSize << std::endl;
 
 	for (int i = 0; i < vectorSize; i++) {
 		number var;
@@ -121,7 +136,6 @@ template <typename number>
 void readVector(std::vector <std::vector <number>>* _vector, std::ifstream* _fs, bool _swapEndianness) {
 	unsigned int vectorSize;
 	readVariable(&vectorSize, _fs, _swapEndianness);
-	std::cout << "MAJOR: " << vectorSize << std::endl;
 
 	for (int i = 0; i < vectorSize; i++) {
 		std::vector <number> vector;

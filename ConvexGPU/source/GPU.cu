@@ -7,7 +7,7 @@
 //#include <math.h>
 //#include <algorithm>
 
-#include "Convex.h"
+//#include "Convex.h"
 #include "ConvexGPU.h"
 
 namespace ConvexGPU {
@@ -55,14 +55,18 @@ namespace ConvexGPU {
 
 	//TODO allow for different data types eg int, float, long
 	//TODO fix code for larger matrixes
-	Matrix <double> matrixMultiply2D(Matrix <double> *a, Matrix <double> *b) {
+	void matrixMultiplyGPU(Matrix <double> *a, Matrix <double> *b, Matrix <double> *output) {
 		if (a->dimensions[1] == b->dimensions[0]) {
-			Matrix <double> resultMatrix(a->dimensions[0], b->dimensions[1]);
+			//Matrix <double> resultMatrix(a->dimensions[0], b->dimensions[1]);
 			int ROWS = a->dimensions[0];
 			int COLUMNS = b->dimensions[1];
 			int ITERATIONS = a->dimensions[1];
 
 			//std::cout << ROWS << "x" << COLUMNS << " with " << ITERATIONS << " iterations" << std::endl;
+
+			//a->copyMemoryToDevice();
+			//b->copyMemoryToDevice();
+			//output->copyMemoryToDevice();
 
 			dim3 threadsPerBlock(COLUMNS, ROWS);
 			dim3 blocksPerGrid(1, 1);
@@ -76,16 +80,16 @@ namespace ConvexGPU {
 				//std::cout << "blocksPerGrid.y = " << blocksPerGrid.y << std::endl;
 			}
 
-			matrixMultiplyKernel <<<blocksPerGrid, threadsPerBlock>>> (a->m_deviceData, b->m_deviceData, resultMatrix.m_deviceData, ITERATIONS, a->dimensions[1], b->dimensions[1]);
+			matrixMultiplyKernel <<<blocksPerGrid, threadsPerBlock>>> (a->m_deviceData, b->m_deviceData, output->m_deviceData, ITERATIONS, a->dimensions[1], b->dimensions[1]);
 			cudaDeviceSynchronize();
 
-			resultMatrix.copyMemoryToHost();
+			output->copyMemoryToHost();
 
-			return resultMatrix;
+			//return resultMatrix;
 		}
 		else {
 			std::cout << "[ERROR] Matrixes are incompatible for multiplication" << std::endl;
-			throw std::invalid_argument("Matrixes aren't compatible for multiplication");
+			throw std::invalid_argument("Matrixes are incompatible for multiplication");
 		}
 	}
 
@@ -101,15 +105,15 @@ namespace ConvexGPU {
 		b.print();
 
 		auto start = std::chrono::high_resolution_clock::now();
-		Matrix <double> c = matrixMultiply2D(&a, &b);
+		//Matrix <double> c = matrixMultiplyGPU(&a, &b);
 		auto stop = std::chrono::high_resolution_clock::now();
 		auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
 		std::cout << "[CONVEX] Multiplication took " << duration.count() << " microseconds; it could do " << 1000000.0f / duration.count() << " such calculations per second" << std::endl;
 
-		c.print();
-		std::cout << c[0] << std::endl;
-		std::cout << c[c.m_size - 1] << std::endl;
+		//c.print();
+		//std::cout << c[0] << std::endl;
+		//std::cout << c[c.m_size - 1] << std::endl;
 	}
 
 	void testSetupIncrement() {
@@ -127,7 +131,7 @@ namespace ConvexGPU {
 		before.push_back(M[2]);
 
 		//std::cout << M.dimensions[0] << std::endl;
-		incrementKernel <<<1, M.dimensions[0]>>> (M.m_deviceData, M.dimensions[0]);
+		incrementKernel << <1, M.dimensions[0] >> > (M.m_deviceData, M.dimensions[0]);
 		cudaDeviceSynchronize();
 
 		after.push_back(M[0]);
