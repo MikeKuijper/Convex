@@ -7,9 +7,9 @@ It has been my pet project for the past few years, and still needs a lot of work
 The following example demonstrates the use of the ImageClassDataset object to train a basic neural discriminator on the MNIST dataset, and save the resulting network in a file called ```mnist.bin```.
 
 ```cpp
-    Convex::ImageClassDataset mnist("./t10k-images.idx3-ubyte", "./t10k-labels.idx1-ubyte", true);
+    ConvexGPU::ImageClassDataset mnist("./t10k-images.idx3-ubyte", "./t10k-labels.idx1-ubyte", true);
     mnist.flatten();
-    Convex::NeuralNetwork n({28*28, 10});
+    Convex::NeuralNetwork n({28*28, 10}, ConvexGPU::CPU);
     n.trainSequence(&mnist, 10000, "./mnist.bin");
 ```
 
